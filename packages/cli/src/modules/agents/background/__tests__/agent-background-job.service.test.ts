@@ -855,7 +855,7 @@ describe('listForThread', () => {
 			.mockResolvedValueOnce([stale])
 			.mockResolvedValueOnce([settledView]);
 		executionRepository.findLatestStatusesByThreadIds.mockResolvedValue(
-			new Map([['child-thread-1', 'interrupted']]),
+			new Map([['child-thread-1', { status: 'interrupted', timeline: null }]]),
 		);
 
 		const jobs = await service.listForThread('thread-1');
@@ -1197,7 +1197,7 @@ describe('reconcile', () => {
 		const { service, jobRepository, executionRepository } = setup();
 		jobRepository.findRunningJobs.mockResolvedValue([makeJob()]);
 		executionRepository.findLatestStatusesByThreadIds.mockResolvedValue(
-			new Map([['child-thread-1', 'error']]),
+			new Map([['child-thread-1', { status: 'error', timeline: null }]]),
 		);
 
 		await service.reconcile();
@@ -1213,7 +1213,7 @@ describe('reconcile', () => {
 		const { service, jobRepository, executionRepository } = setup();
 		jobRepository.findRunningJobs.mockResolvedValue([makeJob()]);
 		executionRepository.findLatestStatusesByThreadIds.mockResolvedValue(
-			new Map([['child-thread-1', 'running']]),
+			new Map([['child-thread-1', { status: 'running', timeline: null }]]),
 		);
 
 		await service.reconcile();
@@ -1251,8 +1251,8 @@ describe('reconcile', () => {
 		]);
 		executionRepository.findLatestStatusesByThreadIds.mockResolvedValue(
 			new Map([
-				['child-thread-1', 'error'],
-				['child-thread-2', 'error'],
+				['child-thread-1', { status: 'error', timeline: null }],
+				['child-thread-2', { status: 'error', timeline: null }],
 			]),
 		);
 		const run = new AbortController();
@@ -1699,7 +1699,7 @@ describe('background task update failures', () => {
 		Container.set(AgentWakeService, wake);
 		jobRepository.findGroupCandidates.mockResolvedValue([makeJob(), makeWorkflowJob()]);
 		executionRepository.findLatestStatusesByThreadIds.mockResolvedValue(
-			new Map([['child-thread-1', 'error']]),
+			new Map([['child-thread-1', { status: 'error', timeline: null }]]),
 		);
 		executionPersistence.findStatusesByIds.mockResolvedValue([{ id: 'exec-1', status: 'success' }]);
 
