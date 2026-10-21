@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { OPEN_AGENT_PREVIEW_KEY } from './AgentSessionsListView.vue';
+import { AGENT_SESSION_ASSISTANT_KEY, OPEN_AGENT_PREVIEW_KEY } from './AgentSessionsListView.vue';
 import { ref, computed, watch, nextTick, onBeforeUnmount, provide, useTemplateRef } from 'vue';
 import {
 	StorageSerializers,
@@ -1838,6 +1838,16 @@ const runConfigWrite: AgentConfigWrite = async (write) => {
 		}
 	}
 };
+provide(AGENT_SESSION_ASSISTANT_KEY, {
+	isAvailable: computed(() => !isArtifactMode.value && instanceAiReady.value),
+	async handoff(params) {
+		if (params.projectId !== projectId.value || params.agentId !== agentId.value) return false;
+		return await handoffToAssistantPanel(
+			buildInstanceAiAgentPreviewHandoffContext(params),
+			params.initialDraft,
+		);
+	},
+});
 provide(AGENT_CONFIG_WRITE_KEY, runConfigWrite);
 provide(OPEN_AGENT_PREVIEW_KEY, {
 	open: () => onOpenPreview(),
