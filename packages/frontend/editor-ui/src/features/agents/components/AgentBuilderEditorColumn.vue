@@ -36,8 +36,8 @@ import AgentPreviewButton from './AgentPreviewButton.vue';
 import AgentSkillsSection from './AgentSkillsSection.vue';
 
 const props = defineProps<{
-	activeMainTab: AgentBuilderMainTab;
-	mainTabOptions: Array<{ label: string; value: AgentBuilderMainTab }>;
+	activeMainTab: AgentBuilderMainTab['value'];
+	mainTabOptions: AgentBuilderMainTab[];
 	localConfig: AgentJsonConfig | null;
 	agent: AgentResource | null;
 	projectId: string;
@@ -90,7 +90,7 @@ watch(
 );
 
 const emit = defineEmits<{
-	'update:activeMainTab': [tab: AgentBuilderMainTab];
+	'update:activeMainTab': [tab: AgentBuilderMainTab['value']];
 	'update:config': [updates: Partial<AgentJsonConfig>, meta?: { source: 'auto' }];
 	/** A budget settings modal saved — the view clears matching budget stops once the save persists. */
 	'update:budget-config': [updates: Partial<AgentJsonConfig>];
@@ -125,7 +125,7 @@ const agentTelemetry = useAgentTelemetry();
 const agentInfoPanel = ref<InstanceType<typeof AgentInfoPanel>>();
 const agentTriggersSection = ref<InstanceType<typeof AgentTriggersSection>>();
 
-function onMainTabSelect(tab: AgentBuilderMainTab) {
+function onMainTabSelect(tab: AgentBuilderMainTab['value']) {
 	if (tab !== 'evals') {
 		agentTelemetry.trackClickedAgentsTab({
 			agentId: props.agentId,
@@ -560,6 +560,10 @@ defineExpose({ onSetupTaskAction });
 
 	:global([data-test-id='tab-agent'] > *) {
 		padding-left: 0;
+	}
+
+	:global([data-test-id='tab-sessions']) {
+		--n8n-tabs--icon-color: var(--icon-color--danger);
 	}
 }
 

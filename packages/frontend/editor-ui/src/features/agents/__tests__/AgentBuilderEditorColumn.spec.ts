@@ -172,11 +172,8 @@ function createPiniaWithEvalStore() {
 
 async function mountColumn(
 	overrides: Partial<{
-		activeMainTab: AgentBuilderMainTab;
-		mainTabOptions: Array<{
-			label: string;
-			value: AgentBuilderMainTab;
-		}>;
+		activeMainTab: AgentBuilderMainTab['value'];
+		mainTabOptions: AgentBuilderMainTab[];
 		knowledgeBaseEnabled: boolean;
 		canEditAgent: boolean;
 		agent: AgentResource | null;

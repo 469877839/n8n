@@ -924,6 +924,7 @@ const previewDock = useTemplateRef<InstanceType<typeof AgentPreviewDock>>('previ
 const executionsCount = computed(() => sessionsStore.threads.length);
 const { activeMainTab, mainTabOptions, executionsDescription } = useAgentBuilderMainTabs({
 	executionsCount,
+	hasFailedSession: computed(() => sessionsStore.hasFailedSession),
 	routeBacked: computed(() => !isArtifactMode.value),
 });
 
