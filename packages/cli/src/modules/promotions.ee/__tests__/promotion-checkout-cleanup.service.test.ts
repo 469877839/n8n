@@ -6,8 +6,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { mock } from 'vitest-mock-extended';
 
+import type { Publisher } from '@n8n/backend-services';
 import { LockedError } from '@n8n/errors';
-import type { Publisher } from '@/scaling/pubsub/publisher.service';
 
 import type { PromotionEnvironment } from '../database/entities/promotion-environment.entity';
 import type { PromotionProvider } from '../database/entities/promotion-provider.entity';
