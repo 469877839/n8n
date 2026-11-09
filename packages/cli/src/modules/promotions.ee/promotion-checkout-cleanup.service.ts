@@ -18,9 +18,9 @@ import {
 import { PromotionWorkingDirectoryService } from './promotion-working-directory.service';
 import { buildCacheDescriptor } from './promotions-git.utils';
 
-type CleanupCommand = PubSubCommandMap['promotion-checkout-cleanup'];
+type EnvironmentChangedCommand = PubSubCommandMap['promotion-environment-changed'];
 
-type CleanupReason = CleanupCommand['reason'];
+type EnvironmentChange = EnvironmentChangedCommand['change'];
 
 /**
  * The one place that removes local checkouts.
@@ -69,13 +69,13 @@ export class PromotionCheckoutCleanupService {
 			throwIfLockLost(signal);
 			return { result: resolved, trashed: await this.removeLocally([environmentId], 'reset') };
 		});
-		await this.finish(trashed, [environmentId], 'disconnected');
+		await this.finish(trashed, [environmentId], 'checkout-disconnected');
 		return result;
 	}
 
 	/** Runs `update` inside the environment lock, then resets the checkout. */
 	async changeCheckoutSettings<T>(environmentId: string, update: () => Promise<T>): Promise<T> {
-		return await this.changeThenRemove([environmentId], 'settings-changed', update);
+		return await this.changeThenRemove([environmentId], 'updated', update);
 	}
 
 	/**
@@ -85,7 +85,7 @@ export class PromotionCheckoutCleanupService {
 	async changeHostUrl<T>(providerId: string, update: () => Promise<T>): Promise<T> {
 		const environmentIds =
 			await this.environmentRepository.findIdsWithRepositoryPathByProvider(providerId);
-		return await this.changeThenRemove(environmentIds, 'settings-changed', update);
+		return await this.changeThenRemove(environmentIds, 'updated', update);
 	}
 
 	/**
@@ -121,12 +121,15 @@ export class PromotionCheckoutCleanupService {
 	 * removes only a checkout that is no longer current. It never publishes, so
 	 * messages cannot loop.
 	 */
-	@OnPubSubEvent('promotion-checkout-cleanup', { instanceType: 'main' })
-	async handleCleanupFromOtherMain({ environmentIds, reason }: CleanupCommand): Promise<void> {
+	@OnPubSubEvent('promotion-environment-changed', { instanceType: 'main' })
+	async handleEnvironmentChangeFromOtherMain({
+		environmentIds,
+		change,
+	}: EnvironmentChangedCommand): Promise<void> {
 		try {
-			if (reason === 'deleted') {
+			if (change === 'deleted') {
 				await this.purgeIfDeleted(environmentIds);
-			} else if (reason === 'disconnected') {
+			} else if (change === 'checkout-disconnected') {
 				// The database stores no connected state, so there is nothing to check.
 				await this.reset(environmentIds);
 			} else {
@@ -135,7 +138,7 @@ export class PromotionCheckoutCleanupService {
 		} catch (error) {
 			this.warn(
 				'Failed to clean up the promotion checkouts for another main',
-				{ environmentIds, reason },
+				{ environmentIds, change },
 				error,
 			);
 		}
@@ -196,10 +199,10 @@ export class PromotionCheckoutCleanupService {
 	 */
 	private async changeThenRemove<T>(
 		environmentIds: string[],
-		reason: CleanupReason,
+		environmentChange: EnvironmentChange,
 		change: () => Promise<T>,
 	): Promise<T> {
-		const removal = reason === 'deleted' ? 'purge' : 'reset';
+		const removal = environmentChange === 'deleted' ? 'purge' : 'reset';
 		const { result, trashed } = await this.holdLocks(environmentIds, async (signals) => {
 			signals.forEach(throwIfLockLost);
 			const changed = await change();
@@ -218,7 +221,7 @@ export class PromotionCheckoutCleanupService {
 			}
 			return { result: changed, trashed };
 		});
-		await this.finish(trashed, environmentIds, reason);
+		await this.finish(trashed, environmentIds, environmentChange);
 		return result;
 	}
 
@@ -239,9 +242,9 @@ export class PromotionCheckoutCleanupService {
 	}
 
 	/** Runs after the locks are released. */
-	private async finish(trashed: string[], environmentIds: string[], reason: CleanupReason) {
+	private async finish(trashed: string[], environmentIds: string[], change: EnvironmentChange) {
 		await this.deleteTrash(trashed);
-		this.publishToOtherMains(environmentIds, reason);
+		this.publishToOtherMains(environmentIds, change);
 	}
 
 	/** For the paths without a lock. */
@@ -299,17 +302,17 @@ export class PromotionCheckoutCleanupService {
 	 * A lost message only leaves disk in use, and the startup check removes the
 	 * folders of deleted environments, so the request does not wait for the publish.
 	 */
-	private publishToOtherMains(environmentIds: string[], reason: CleanupReason) {
+	private publishToOtherMains(environmentIds: string[], change: EnvironmentChange) {
 		if (!this.instanceSettings.isMultiMain || environmentIds.length === 0) return;
 		void this.publisher
 			.publishCommand({
-				command: 'promotion-checkout-cleanup',
-				payload: { environmentIds, reason },
+				command: 'promotion-environment-changed',
+				payload: { environmentIds, change },
 			})
 			.catch((error: unknown) => {
 				this.warn(
 					'Failed to ask the other mains to remove their promotion checkouts',
-					{ environmentIds, reason },
+					{ environmentIds, change },
 					error,
 				);
 			});

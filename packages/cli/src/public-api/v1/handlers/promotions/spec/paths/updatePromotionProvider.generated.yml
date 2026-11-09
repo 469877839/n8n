@@ -92,5 +92,7 @@ responses:
     $ref: ../../../../shared/spec/responses/unsupportedMediaType.yml
   '423':
     $ref: ../../../../shared/spec/responses/locked.yml
+  '429':
+    $ref: ../../../../shared/spec/responses/tooManyRequests.yml
   '503':
     $ref: ../../../../shared/spec/responses/serviceUnavailable.yml

@@ -1,6 +1,7 @@
 import { Service } from '@n8n/di';
 import { InstanceSettings } from 'n8n-core';
-import { jsonParse, UnexpectedError } from 'n8n-workflow';
+import { jsonParse } from 'n8n-workflow';
+import { UnexpectedError } from '@n8n/errors';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';

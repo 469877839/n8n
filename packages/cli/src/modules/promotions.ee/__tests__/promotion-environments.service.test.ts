@@ -200,8 +200,8 @@ describe('PromotionEnvironmentsService', () => {
 		await service.delete(ENVIRONMENT_ID, actor);
 
 		expect(publisher.publishCommand).toHaveBeenCalledWith({
-			command: 'promotion-checkout-cleanup',
-			payload: { environmentIds: [ENVIRONMENT_ID], reason: 'deleted' },
+			command: 'promotion-environment-changed',
+			payload: { environmentIds: [ENVIRONMENT_ID], change: 'deleted' },
 		});
 	});
 
@@ -309,8 +309,8 @@ describe('PromotionEnvironmentsService', () => {
 				expect(await exists(paths.repositoryFolder)).toBe(false);
 				expect(await exists(paths.sshDir)).toBe(true);
 				expect(publisher.publishCommand).toHaveBeenCalledWith({
-					command: 'promotion-checkout-cleanup',
-					payload: { environmentIds: [ENVIRONMENT_ID], reason: 'settings-changed' },
+					command: 'promotion-environment-changed',
+					payload: { environmentIds: [ENVIRONMENT_ID], change: 'updated' },
 				});
 			},
 		);

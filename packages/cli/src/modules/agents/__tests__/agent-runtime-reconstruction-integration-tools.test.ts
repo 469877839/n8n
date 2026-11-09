@@ -376,6 +376,7 @@ describe('AgentRuntimeReconstructionService integration tools', () => {
 				getKnowledgeTotals: async () => ({ fileCount: 0, totalBytes: 0 }),
 			}),
 			mock<AgentPublishHistoryRepository>(),
+			makeKnowledgeAvailabilityService(),
 		);
 		agentTestChatService = new AgentTestChatService(n8nMemory, mock<AgentChatAttachmentService>());
 		agentsService = new AgentsService(
@@ -510,7 +511,6 @@ describe('AgentRuntimeReconstructionService integration tools', () => {
 					'read_plan',
 					'update_plan',
 					'close_plan',
-					'resume_background_jobs',
 				],
 			});
 

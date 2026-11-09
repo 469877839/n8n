@@ -72,8 +72,7 @@ export const IMMEDIATE_COMMANDS = new Set<PubSub.Command['command']>([
 	'display-workflow-publication-status',
 	'workflow-publish-wake-up',
 	'reload-public-api-rate-limit-settings',
-	// Debouncing by name would drop all but one of several quick cleanups.
-	'promotion-checkout-cleanup',
+	'promotion-environment-changed',
 ]);
 
 /** How often a main rechecks the DB for a queued job whose completion event it may have missed. */

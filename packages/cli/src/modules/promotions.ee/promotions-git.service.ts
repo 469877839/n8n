@@ -5,7 +5,6 @@ import type { Dirent } from 'node:fs';
 import { chmod, mkdir, mkdtemp, readdir, rename, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { UnexpectedError } from 'n8n-workflow';
 import pLimit from 'p-limit';
 import {
 	CheckRepoActions,
@@ -16,7 +15,7 @@ import {
 	type SimpleGitOptions,
 } from 'simple-git';
 
-import { BadRequestError, ServiceUnavailableError } from '@n8n/errors';
+import { BadRequestError, ServiceUnavailableError, UnexpectedError } from '@n8n/errors';
 
 import {
 	GIT_COMMAND_STALL_TIMEOUT_MS,

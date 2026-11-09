@@ -6,8 +6,8 @@ import {
 	NotFoundError,
 	ServiceUnavailableError,
 	TooManyRequestsError,
+	UnexpectedError,
 } from '@n8n/errors';
-import { UnexpectedError } from 'n8n-workflow';
 
 import { PromotionConflictError } from '../database/promotion-conflict.error';
 import { PromotionLockLostError } from '../promotion-environment-lock.service';

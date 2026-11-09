@@ -135,25 +135,25 @@ describe('PromotionCheckoutCleanupService', () => {
 				name: 'deleteEnvironment',
 				run: async () => await service.deleteEnvironment(LIVE_ID, change),
 				change,
-				reason: 'deleted',
+				publishedChange: 'deleted',
 			},
 			{
 				name: 'disconnect',
 				run: async () => await service.disconnect(LIVE_ID, change),
 				change,
-				reason: 'disconnected',
+				publishedChange: 'checkout-disconnected',
 			},
 			{
 				name: 'changeCheckoutSettings',
 				run: async () => await service.changeCheckoutSettings(LIVE_ID, change),
 				change,
-				reason: 'settings-changed',
+				publishedChange: 'updated',
 			},
 			{
 				name: 'changeHostUrl',
 				run: async () => await service.changeHostUrl('prov1', change),
 				change,
-				reason: 'settings-changed',
+				publishedChange: 'updated',
 			},
 		] as const;
 	};
@@ -580,27 +580,27 @@ describe('PromotionCheckoutCleanupService', () => {
 	});
 
 	describe('publishing to the other mains', () => {
-		const command = (environmentIds: string[], reason: string) => ({
-			command: 'promotion-checkout-cleanup',
-			payload: { environmentIds, reason },
+		const command = (environmentIds: string[], change: string) => ({
+			command: 'promotion-environment-changed',
+			payload: { environmentIds, change },
 		});
 
 		it.each(entryPointNames)(
-			'$name publishes the IDs and the reason after the local cleanup on multi-main',
+			'$name publishes the IDs and the change after the local cleanup on multi-main',
 			async ({ name }) => {
 				isMultiMain = true;
 				const paths = await createCheckout(LIVE_ID);
 				vi.spyOn(workingDirectory, 'purge');
 				vi.spyOn(workingDirectory, 'resetCheckout');
-				const { run, reason } = entryPoint(name);
+				const { run, publishedChange } = entryPoint(name);
 
 				await run();
 
 				expect(await exists(paths.repositoryFolder)).toBe(false);
 				expect(publisher.publishCommand).toHaveBeenCalledTimes(1);
-				expect(publisher.publishCommand).toHaveBeenCalledWith(command([LIVE_ID], reason));
+				expect(publisher.publishCommand).toHaveBeenCalledWith(command([LIVE_ID], publishedChange));
 				const cleanup =
-					reason === 'deleted' ? workingDirectory.purge : workingDirectory.resetCheckout;
+					publishedChange === 'deleted' ? workingDirectory.purge : workingDirectory.resetCheckout;
 				expect(vi.mocked(cleanup).mock.invocationCallOrder[0]).toBeLessThan(
 					publisher.publishCommand.mock.invocationCallOrder[0],
 				);
@@ -617,7 +617,7 @@ describe('PromotionCheckoutCleanupService', () => {
 			await service.changeHostUrl('prov1', async () => {});
 
 			expect(publisher.publishCommand).toHaveBeenCalledWith(
-				command([LIVE_ID, DELETED_ID], 'settings-changed'),
+				command([LIVE_ID, DELETED_ID], 'updated'),
 			);
 		});
 
@@ -683,13 +683,13 @@ describe('PromotionCheckoutCleanupService', () => {
 			await vi.waitFor(() =>
 				expect(logger.warn).toHaveBeenCalledWith(
 					'Failed to ask the other mains to remove their promotion checkouts',
-					{ environmentIds: [LIVE_ID], reason: 'deleted', error: 'Connection is closed' },
+					{ environmentIds: [LIVE_ID], change: 'deleted', error: 'Connection is closed' },
 				),
 			);
 		});
 	});
 
-	describe('handleCleanupFromOtherMain', () => {
+	describe('handleEnvironmentChangeFromOtherMain', () => {
 		beforeEach(() => {
 			isMultiMain = true;
 		});
@@ -699,9 +699,9 @@ describe('PromotionCheckoutCleanupService', () => {
 				const paths = await createCheckout(DELETED_ID);
 				environmentRepository.findExistingIds.mockResolvedValue(new Set());
 
-				await service.handleCleanupFromOtherMain({
+				await service.handleEnvironmentChangeFromOtherMain({
 					environmentIds: [DELETED_ID],
-					reason: 'deleted',
+					change: 'deleted',
 				});
 
 				expect(environmentRepository.findExistingIds).toHaveBeenCalledWith([DELETED_ID]);
@@ -712,7 +712,10 @@ describe('PromotionCheckoutCleanupService', () => {
 				const paths = await createCheckout(LIVE_ID);
 				environmentRepository.findExistingIds.mockResolvedValue(new Set([LIVE_ID]));
 
-				await service.handleCleanupFromOtherMain({ environmentIds: [LIVE_ID], reason: 'deleted' });
+				await service.handleEnvironmentChangeFromOtherMain({
+					environmentIds: [LIVE_ID],
+					change: 'deleted',
+				});
 
 				expect(await exists(paths.repositoryFolder)).toBe(true);
 				expect(logger.warn).toHaveBeenCalledWith(
@@ -726,22 +729,25 @@ describe('PromotionCheckoutCleanupService', () => {
 				environmentRepository.findExistingIds.mockRejectedValue(new Error('database is locked'));
 
 				await expect(
-					service.handleCleanupFromOtherMain({ environmentIds: [DELETED_ID], reason: 'deleted' }),
+					service.handleEnvironmentChangeFromOtherMain({
+						environmentIds: [DELETED_ID],
+						change: 'deleted',
+					}),
 				).resolves.toBeUndefined();
 
 				expect(await exists(paths.rootFolder)).toBe(true);
 				expect(logger.warn).toHaveBeenCalledWith(
 					'Failed to clean up the promotion checkouts for another main',
-					{ environmentIds: [DELETED_ID], reason: 'deleted', error: 'database is locked' },
+					{ environmentIds: [DELETED_ID], change: 'deleted', error: 'database is locked' },
 				);
 			});
 		});
 
-		describe('settings-changed', () => {
+		describe('updated', () => {
 			const handle = async () =>
-				await service.handleCleanupFromOtherMain({
+				await service.handleEnvironmentChangeFromOtherMain({
 					environmentIds: [LIVE_ID],
-					reason: 'settings-changed',
+					change: 'updated',
 				});
 
 			it('keeps a checkout that matches the current settings', async () => {
@@ -833,9 +839,9 @@ describe('PromotionCheckoutCleanupService', () => {
 					return null;
 				});
 
-				await service.handleCleanupFromOtherMain({
+				await service.handleEnvironmentChangeFromOtherMain({
 					environmentIds: [LIVE_ID, DELETED_ID],
-					reason: 'settings-changed',
+					change: 'updated',
 				});
 
 				expect(await exists(second.rootFolder)).toBe(false);
@@ -843,13 +849,13 @@ describe('PromotionCheckoutCleanupService', () => {
 			});
 		});
 
-		describe('disconnected', () => {
+		describe('checkout-disconnected', () => {
 			it('resets the checkout without a database check and keeps the host keys', async () => {
 				const paths = await createCheckout(LIVE_ID);
 
-				await service.handleCleanupFromOtherMain({
+				await service.handleEnvironmentChangeFromOtherMain({
 					environmentIds: [LIVE_ID],
-					reason: 'disconnected',
+					change: 'checkout-disconnected',
 				});
 
 				expect(environmentRepository.findExistingIds).not.toHaveBeenCalled();
@@ -859,46 +865,46 @@ describe('PromotionCheckoutCleanupService', () => {
 			});
 		});
 
-		it.each(['deleted', 'disconnected', 'settings-changed'] as const)(
+		it.each(['deleted', 'checkout-disconnected', 'updated'] as const)(
 			'never publishes for `%s`',
-			async (reason) => {
+			async (change) => {
 				await createCheckout(LIVE_ID);
 				environmentRepository.findExistingIds.mockResolvedValue(new Set());
 				environmentRepository.findByIdWithProvider.mockResolvedValue(environment());
 
-				await service.handleCleanupFromOtherMain({ environmentIds: [LIVE_ID], reason });
+				await service.handleEnvironmentChangeFromOtherMain({ environmentIds: [LIVE_ID], change });
 
 				expect(publisher.publishCommand).not.toHaveBeenCalled();
 			},
 		);
 
-		it.each(['deleted', 'disconnected', 'settings-changed'] as const)(
+		it.each(['deleted', 'checkout-disconnected', 'updated'] as const)(
 			'handles a duplicate `%s` message without a warning',
-			async (reason) => {
+			async (change) => {
 				await createCheckout(LIVE_ID);
 				environmentRepository.findExistingIds.mockResolvedValue(new Set());
 				environmentRepository.findByIdWithProvider.mockResolvedValue(
 					environment({ settings: { schemaVersion: 1, branchName: 'production' } }),
 				);
-				const message = { environmentIds: [LIVE_ID], reason };
+				const message = { environmentIds: [LIVE_ID], change };
 
-				await service.handleCleanupFromOtherMain(message);
-				await service.handleCleanupFromOtherMain(message);
+				await service.handleEnvironmentChangeFromOtherMain(message);
+				await service.handleEnvironmentChangeFromOtherMain(message);
 
 				expect(await exists(workingDirectory.paths(LIVE_ID).repositoryFolder)).toBe(false);
 				expect(logger.warn).not.toHaveBeenCalled();
 			},
 		);
 
-		it.each(['deleted', 'disconnected', 'settings-changed'] as const)(
+		it.each(['deleted', 'checkout-disconnected', 'updated'] as const)(
 			'handles `%s` without the environment lock',
-			async (reason) => {
+			async (change) => {
 				await createCheckout(LIVE_ID);
 				environmentRepository.findExistingIds.mockResolvedValue(new Set());
 				environmentRepository.findByIdWithProvider.mockResolvedValue(null);
 				const release = await holdLock(LIVE_ID);
 
-				await service.handleCleanupFromOtherMain({ environmentIds: [LIVE_ID], reason });
+				await service.handleEnvironmentChangeFromOtherMain({ environmentIds: [LIVE_ID], change });
 
 				expect(await exists(workingDirectory.paths(LIVE_ID).repositoryFolder)).toBe(false);
 				await release();
@@ -907,9 +913,9 @@ describe('PromotionCheckoutCleanupService', () => {
 
 		it('logs a warning and does not throw for an ID that is not a generated ID', async () => {
 			await expect(
-				service.handleCleanupFromOtherMain({
+				service.handleEnvironmentChangeFromOtherMain({
 					environmentIds: ['../outside'],
-					reason: 'disconnected',
+					change: 'checkout-disconnected',
 				}),
 			).resolves.toBeUndefined();
 

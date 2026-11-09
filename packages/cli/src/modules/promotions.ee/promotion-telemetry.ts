@@ -3,8 +3,8 @@ import {
 	ResponseError,
 	ServiceUnavailableError,
 	TooManyRequestsError,
+	UserError,
 } from '@n8n/errors';
-import { UserError } from 'n8n-workflow';
 
 import { PromotionLockLostError } from './promotion-environment-lock.service';
 import { PromotionGitError, PromotionLocalGitError } from './promotions-git.error';
