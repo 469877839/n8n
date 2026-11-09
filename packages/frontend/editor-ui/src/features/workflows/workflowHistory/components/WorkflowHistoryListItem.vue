@@ -274,7 +274,7 @@ $hoverBackground: var(--color--background--light-1);
 	margin-top: var(--timeline-gap);
 
 	&.firstItem {
-		--timeline-gap: 0;
+		margin-top: 0;
 	}
 
 	// Grouped items have a smaller gap
@@ -310,11 +310,15 @@ $hoverBackground: var(--color--background--light-1);
 	align-self: stretch;
 
 	@include timeline-line;
-	--timeline-hole: var(--spacing--2xs);
 
 	// Grouped items have no dot, so the line runs through.
-	.grouped & {
-		--timeline-hole: 0;
+	.item:not(.grouped) & {
+		--timeline-hole: var(--spacing--2xs);
+	}
+
+	// Nothing is above the first item, so no line runs above its dot.
+	.firstItem &::before {
+		display: none;
 	}
 }
 
