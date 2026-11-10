@@ -8,6 +8,7 @@ import {
 	OutboundHttp,
 	SsrfBlockedHostnameError,
 	SsrfBlockedIpError,
+	SsrfBlockedUrlError,
 	retryabilityFromError,
 	type HttpRequestClient,
 	type TypedHttpFullResponse,
@@ -168,7 +169,9 @@ export class GitLabHostClient implements GitHostClient {
 			if (
 				chain.some(
 					(cause) =>
-						cause instanceof SsrfBlockedIpError || cause instanceof SsrfBlockedHostnameError,
+						cause instanceof SsrfBlockedIpError ||
+						cause instanceof SsrfBlockedHostnameError ||
+						cause instanceof SsrfBlockedUrlError,
 				)
 			) {
 				this.logger.warn('GitLab request blocked by instance network policy', { path });

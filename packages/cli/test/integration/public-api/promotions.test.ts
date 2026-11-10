@@ -240,7 +240,10 @@ describe('Promotions in Public API', () => {
 			])('applies configured IP rules: %j', async ({ enabled, allowed, expectedStatus }) => {
 				const config = new SsrfProtectionConfig();
 				config.enabled = enabled;
-				if (allowed) config.allowedIpRanges.push('127.0.0.1/32');
+				if (allowed) {
+					config.allowedIpRanges.push('127.0.0.1/32');
+					config.allowedPorts.push(8929);
+				}
 				const clientFor = useNetworkPolicy(config);
 				const api = validAccess(internalBaseUrl);
 				try {

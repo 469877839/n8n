@@ -92,8 +92,9 @@ guarded and an `'unsafe'` call is never guarded, regardless of the flag.
 `SsrfProtectionConfig` (env-driven) also configures *how* the guard behaves once
 it runs — the blocked/allowed IP ranges (`N8N_SSRF_BLOCKED_IP_RANGES`,
 `N8N_SSRF_ALLOWED_IP_RANGES`), the allowed and blocked hostnames
-(`N8N_SSRF_ALLOWED_HOSTNAMES`, `N8N_SSRF_BLOCKED_HOSTNAMES`), and the DNS-cache
-size.
+(`N8N_SSRF_ALLOWED_HOSTNAMES`, `N8N_SSRF_BLOCKED_HOSTNAMES`), the allowed URL
+schemes and destination ports (`N8N_SSRF_ALLOWED_SCHEMES`,
+`N8N_SSRF_ALLOWED_PORTS`), and the DNS-cache size.
 
 ### Choosing a safety mode: when to opt out
 

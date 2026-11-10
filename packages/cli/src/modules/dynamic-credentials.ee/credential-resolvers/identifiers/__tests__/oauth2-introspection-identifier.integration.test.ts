@@ -98,7 +98,11 @@ describe('OAuth2TokenIntrospectionIdentifier (integration)', () => {
 	test('resolves the subject over a real socket through the SSRF-guarded client', async () => {
 		// Loopback is blocked by default; an internal target is reached via the
 		// allowlist (mirroring a self-hosted IdP), not by disabling the guard.
-		const identifier = buildIdentifier({ enabled: true, allowedIpRanges: ['127.0.0.0/8'] });
+		const identifier = buildIdentifier({
+			enabled: true,
+			allowedIpRanges: ['127.0.0.0/8'],
+			allowedPorts: [],
+		});
 
 		const subject = await identifier.resolve(mockContext, validOptions());
 

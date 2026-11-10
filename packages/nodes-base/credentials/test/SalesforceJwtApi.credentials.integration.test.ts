@@ -56,7 +56,11 @@ describe('SalesforceJwtApi Credential (integration)', () => {
 		});
 
 		const config = new SsrfProtectionConfig();
-		Object.assign(config, { enabled: true, allowedIpRanges: ['127.0.0.0/8'] });
+		Object.assign(config, {
+			enabled: true,
+			allowedIpRanges: ['127.0.0.0/8'],
+			allowedPorts: [],
+		});
 		Container.set(SsrfProtectionConfig, config);
 	});
 

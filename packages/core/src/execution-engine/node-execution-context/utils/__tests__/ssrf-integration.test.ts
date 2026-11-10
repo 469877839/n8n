@@ -217,6 +217,61 @@ describe('SSRF end-to-end integration', () => {
 		await expect(httpRequest(requestOptions)).resolves.toEqual({ ok: true });
 	});
 
+	describe('scheme and port policy', () => {
+		test('blocks a disallowed scheme before any request is sent', async () => {
+			const { ssrfBridge } = createSsrfBridge();
+			const helpers = createRequestHelpers(ssrfBridge);
+
+			await expect(
+				helpers.httpRequest({ method: 'GET', url: 'ftp://example.com/file' }),
+			).rejects.toThrow('The request was blocked because the URL scheme is not allowed');
+		});
+
+		test('blocks a disallowed port before any request is sent', async () => {
+			const dnsResolver = createMockDnsResolver({
+				'example.com': [{ address: '93.184.216.34', family: 4 }],
+			});
+			const { ssrfBridge } = createSsrfBridge({}, dnsResolver);
+			const helpers = createRequestHelpers(ssrfBridge);
+
+			await expect(
+				helpers.httpRequest({ method: 'GET', url: 'http://example.com:8080/api' }),
+			).rejects.toThrow('The request was blocked because the destination port is not allowed');
+			// Blocked before the port mattered: DNS never ran.
+			expect(dnsResolver.lookup).not.toHaveBeenCalled();
+		});
+
+		test('allows a non-standard port when it is configured', async () => {
+			const dnsResolver = createMockDnsResolver({
+				'example.com': [{ address: '93.184.216.34', family: 4 }],
+			});
+			const { ssrfBridge } = createSsrfBridge({ allowedPorts: [80, 443, 8080] }, dnsResolver);
+			const helpers = createRequestHelpers(ssrfBridge);
+
+			nock('http://example.com:8080').get('/api').reply(200, { ok: true });
+
+			await expect(
+				helpers.httpRequest({ method: 'GET', url: 'http://example.com:8080/api' }),
+			).resolves.toEqual({ ok: true });
+		});
+
+		test('blocks a redirect to a disallowed scheme', async () => {
+			const dnsResolver = createMockDnsResolver({
+				'public.example': [{ address: '93.184.216.34', family: 4 }],
+			});
+			const { ssrfBridge } = createSsrfBridge({}, dnsResolver);
+			const helpers = createRequestHelpers(ssrfBridge);
+
+			nock('http://public.example')
+				.get('/redirect')
+				.reply(302, '', { Location: 'ftp://example.com/file' });
+
+			await expect(
+				helpers.httpRequest({ method: 'GET', url: 'http://public.example/redirect' }),
+			).rejects.toThrow('The request was blocked because the URL scheme is not allowed');
+		});
+	});
+
 	describe('getSecureEgressFilter', () => {
 		test('returns the instance filter when egress filtering is enabled', () => {
 			const { ssrfBridge } = createSsrfBridge();

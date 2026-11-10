@@ -5,7 +5,9 @@ import { Config, Env } from '../decorators';
 
 /**
  * Default blocked IP ranges applied when N8N_SSRF_BLOCKED_IP_RANGES is 'default'.
- * Covers RFC 1918, loopback, link-local, IPv6 unique local, and reserved/special ranges.
+ * Covers RFC 1918, loopback, link-local, multicast, unspecified, IPv6 unique
+ * local, and reserved/special ranges. IPv4-mapped IPv6 addresses need no
+ * dedicated entry: `net.BlockList` matches them against the IPv4 ranges.
  */
 export const SSRF_DEFAULT_BLOCKED_IP_RANGES: readonly string[] = Object.freeze([
 	// RFC 1918 private ranges
@@ -21,6 +23,11 @@ export const SSRF_DEFAULT_BLOCKED_IP_RANGES: readonly string[] = Object.freeze([
 	// IPv6 unique local
 	'fc00::/7',
 	'fd00::/8',
+	// Multicast
+	'224.0.0.0/4',
+	'ff00::/8',
+	// Unspecified
+	'::/128',
 	// Reserved/special purpose
 	'0.0.0.0/8',
 	'192.0.0.0/24',
@@ -28,6 +35,7 @@ export const SSRF_DEFAULT_BLOCKED_IP_RANGES: readonly string[] = Object.freeze([
 	'198.18.0.0/15',
 	'198.51.100.0/24',
 	'203.0.113.0/24',
+	'240.0.0.0/4',
 ]);
 
 /**
@@ -48,6 +56,22 @@ const parseBlockedIpRanges = (input: string): string[] => {
 };
 
 const blockedIpRangesSchema = z.string().transform(parseBlockedIpRanges);
+
+/**
+ * Parses a comma-separated list of port numbers, dropping invalid entries.
+ */
+const parseAllowedPorts = (input: string): number[] => {
+	const ports = input
+		.split(',')
+		.map((value) => value.trim())
+		.filter((value) => value.length > 0)
+		.map((value) => Number.parseInt(value, 10))
+		.filter((port) => Number.isInteger(port) && port >= 1 && port <= 65535);
+
+	return [...new Set(ports)];
+};
+
+const allowedPortsSchema = z.string().transform(parseAllowedPorts);
 
 /**
  * Configuration for SSRF (Server-Side Request Forgery) protection.
@@ -145,6 +169,25 @@ export class SsrfProtectionConfig {
 	 */
 	@Env('N8N_SSRF_BLOCKED_HOSTNAMES')
 	blockedHostnames: CommaSeparatedStringArray<string> = [];
+
+	/**
+	 * The URL schemes that guarded requests are allowed to use. Comma-separated,
+	 * for example `http,https`. Any other scheme, for example `ftp` or `file`,
+	 * is rejected before the request is sent. Set to an empty value to turn off
+	 * the scheme check.
+	 */
+	@Env('N8N_SSRF_ALLOWED_SCHEMES')
+	allowedSchemes: CommaSeparatedStringArray<string> = ['http', 'https'];
+
+	/**
+	 * The destination ports that guarded requests are allowed to reach.
+	 * Comma-separated port numbers, for example `80,443,8080`. A URL without an
+	 * explicit port uses the default port of its scheme. Requests to any other
+	 * port are rejected before the request is sent. Set to an empty value to
+	 * allow every port.
+	 */
+	@Env('N8N_SSRF_ALLOWED_PORTS', allowedPortsSchema)
+	allowedPorts: number[] = [80, 443];
 
 	/**
 	 * The maximum size, in bytes, of the internal cache that remembers recent

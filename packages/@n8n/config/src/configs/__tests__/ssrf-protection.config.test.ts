@@ -40,9 +40,73 @@ describe('SsrfProtectionConfig', () => {
 			expect(Container.get(SsrfProtectionConfig).blockedHostnames).toEqual([]);
 		});
 
+		test('allowedSchemes defaults to http and https', () => {
+			process.env = {};
+			expect(Container.get(SsrfProtectionConfig).allowedSchemes).toEqual(['http', 'https']);
+		});
+
+		test('allowedPorts defaults to 80 and 443', () => {
+			process.env = {};
+			expect(Container.get(SsrfProtectionConfig).allowedPorts).toEqual([80, 443]);
+		});
+
 		test('dnsCacheMaxSize is 1048576', () => {
 			process.env = {};
 			expect(Container.get(SsrfProtectionConfig).dnsCacheMaxSize).toBe(1048576);
+		});
+	});
+
+	describe('default blocked ranges', () => {
+		test('covers loopback, private, link-local, multicast, and unspecified ranges', () => {
+			expect(SSRF_DEFAULT_BLOCKED_IP_RANGES).toEqual(
+				expect.arrayContaining([
+					'127.0.0.0/8',
+					'::1/128',
+					'10.0.0.0/8',
+					'172.16.0.0/12',
+					'192.168.0.0/16',
+					'169.254.0.0/16',
+					'fe80::/10',
+					'224.0.0.0/4',
+					'ff00::/8',
+					'0.0.0.0/8',
+					'::/128',
+				]),
+			);
+		});
+	});
+
+	describe('N8N_SSRF_ALLOWED_SCHEMES', () => {
+		test('parses comma-separated schemes', () => {
+			process.env = { N8N_SSRF_ALLOWED_SCHEMES: 'https,http' };
+			expect(Container.get(SsrfProtectionConfig).allowedSchemes).toEqual(['https', 'http']);
+		});
+
+		test('is empty when env var is empty string', () => {
+			process.env = { N8N_SSRF_ALLOWED_SCHEMES: '' };
+			expect(Container.get(SsrfProtectionConfig).allowedSchemes).toEqual([]);
+		});
+	});
+
+	describe('N8N_SSRF_ALLOWED_PORTS', () => {
+		test('parses comma-separated ports', () => {
+			process.env = { N8N_SSRF_ALLOWED_PORTS: '80,443,8080' };
+			expect(Container.get(SsrfProtectionConfig).allowedPorts).toEqual([80, 443, 8080]);
+		});
+
+		test('drops invalid entries', () => {
+			process.env = { N8N_SSRF_ALLOWED_PORTS: '80,not-a-port,70000,0,443' };
+			expect(Container.get(SsrfProtectionConfig).allowedPorts).toEqual([80, 443]);
+		});
+
+		test('removes duplicate ports', () => {
+			process.env = { N8N_SSRF_ALLOWED_PORTS: '443,443,80' };
+			expect(Container.get(SsrfProtectionConfig).allowedPorts).toEqual([443, 80]);
+		});
+
+		test('is empty when env var is empty string', () => {
+			process.env = { N8N_SSRF_ALLOWED_PORTS: '' };
+			expect(Container.get(SsrfProtectionConfig).allowedPorts).toEqual([]);
 		});
 	});
 

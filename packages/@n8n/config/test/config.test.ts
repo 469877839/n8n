@@ -674,6 +674,8 @@ describe('GlobalConfig', () => {
 			allowedIpRanges: [],
 			allowedHostnames: [],
 			blockedHostnames: [],
+			allowedSchemes: ['http', 'https'],
+			allowedPorts: [80, 443],
 			dnsCacheMaxSize: 1024 * 1024,
 		},
 		httpRequest: {

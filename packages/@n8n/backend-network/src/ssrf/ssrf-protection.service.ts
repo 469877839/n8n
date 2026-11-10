@@ -13,10 +13,17 @@ import { HostnameMatcher } from './hostname-matcher';
 import { buildIpRangeList } from './ip-range-builder';
 import { SsrfBlockedHostnameError } from './ssrf-blocked-hostname.error';
 import { SsrfBlockedIpError } from './ssrf-blocked-ip.error';
+import { SsrfBlockedUrlError } from './ssrf-blocked-url.error';
 
 export type SsrfCheckResult = Result<void, Error>;
 
-type SsrfBlockedReason = 'blocked_ip' | 'blocked_hostname' | 'invalid_url' | 'dns_error';
+type SsrfBlockedReason =
+	| 'blocked_ip'
+	| 'blocked_hostname'
+	| 'blocked_scheme'
+	| 'blocked_port'
+	| 'invalid_url'
+	| 'dns_error';
 type SsrfBlockedPayload = { phase: SsrfPhase; reason: SsrfBlockedReason; durationMs: number };
 type SsrfAllowedPayload = { phase: SsrfPhase; durationMs: number };
 
@@ -42,6 +49,18 @@ export interface SsrfBridge {
 }
 
 type LookAndValidateResult = Result<LookupAddress[], Error>;
+
+/**
+ * Well-known default ports, used when a URL carries no explicit port.
+ * Schemes outside this map have no default port to check against.
+ */
+const DEFAULT_PORT_BY_SCHEME: Readonly<Record<string, number>> = {
+	http: 80,
+	https: 443,
+	ws: 80,
+	wss: 443,
+	ftp: 21,
+};
 
 /**
  * Validates outbound HTTP requests against configurable blocklists and allowlists
@@ -105,6 +124,7 @@ export class SsrfProtectionService implements SsrfBridge {
 	/**
 	 * Validate a URL by resolving its hostname and checking all resolved IPs.
 	 * Direct IP URLs (e.g. http://127.0.0.1) are validated without DNS resolution.
+	 * The scheme and port are checked against the configured allow-lists first.
 	 */
 	async validateUrl(url: string | URL): Promise<SsrfCheckResult> {
 		const parsed = this.tryParseUrl(url);
@@ -115,6 +135,11 @@ export class SsrfProtectionService implements SsrfBridge {
 				durationMs: 0,
 			});
 			return createResultError(new Error(`Invalid URL: ${String(url)}`));
+		}
+
+		const schemeAndPort = this.withEvents('pre_flight', () => this.validateSchemeAndPort(parsed));
+		if (!schemeAndPort.ok) {
+			return schemeAndPort;
 		}
 
 		const result = await this.withEvents(
@@ -197,6 +222,11 @@ export class SsrfProtectionService implements SsrfBridge {
 		const parsed = this.tryParseUrl(url);
 		if (!parsed) return;
 
+		const schemeAndPort = this.withEvents('redirect', () => this.validateSchemeAndPort(parsed));
+		if (!schemeAndPort.ok) {
+			throw schemeAndPort.error;
+		}
+
 		const { hostname } = parsed;
 
 		if (this.allowedHostnameMatcher.matches(hostname)) return;
@@ -214,6 +244,35 @@ export class SsrfProtectionService implements SsrfBridge {
 				throw result.error;
 			}
 		}
+	}
+
+	/**
+	 * Validate a parsed URL against the configured scheme and port allow-lists.
+	 * An empty allow-list disables its check. A URL without an explicit port is
+	 * checked against the default port of its scheme; when the scheme has no
+	 * known default port and a port allow-list is configured, the URL is
+	 * rejected (fail closed).
+	 */
+	private validateSchemeAndPort(parsed: URL): SsrfCheckResult {
+		const scheme = parsed.protocol.replace(/:$/, '').toLowerCase();
+		const allowedSchemes = this.ssrfConfig.allowedSchemes;
+		if (allowedSchemes.length > 0 && !allowedSchemes.includes(scheme)) {
+			return createResultError(new SsrfBlockedUrlError('scheme', scheme));
+		}
+
+		const allowedPorts = this.ssrfConfig.allowedPorts;
+		if (allowedPorts.length === 0) {
+			return createResultOk(undefined);
+		}
+
+		const port = parsed.port === '' ? DEFAULT_PORT_BY_SCHEME[scheme] : Number(parsed.port);
+		if (port === undefined || !allowedPorts.includes(port)) {
+			return createResultError(
+				new SsrfBlockedUrlError('port', parsed.port === '' ? 'unknown' : parsed.port),
+			);
+		}
+
+		return createResultOk(undefined);
 	}
 
 	/**
@@ -340,6 +399,9 @@ export class SsrfProtectionService implements SsrfBridge {
 		}
 		if (error instanceof SsrfBlockedHostnameError) {
 			return 'blocked_hostname';
+		}
+		if (error instanceof SsrfBlockedUrlError) {
+			return error.reason === 'scheme' ? 'blocked_scheme' : 'blocked_port';
 		}
 		return 'dns_error';
 	}

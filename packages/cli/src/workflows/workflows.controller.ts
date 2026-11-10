@@ -15,7 +15,7 @@ import {
 	type WorkflowTransferPreview,
 } from '@n8n/api-types';
 import { Logger } from '@n8n/backend-common';
-import { OutboundHttp, SsrfBlockedIpError } from '@n8n/backend-network';
+import { OutboundHttp, SsrfBlockedIpError, SsrfBlockedUrlError } from '@n8n/backend-network';
 import { EventService } from '@n8n/backend-services';
 import { GlobalConfig } from '@n8n/config';
 import {
@@ -788,14 +788,18 @@ export class WorkflowsController {
 	}
 
 	/**
-	 * Walk the error cause chain to find a {@link SsrfBlockedIpError} buried
+	 * Walk the error cause chain to find an SSRF block error buried
 	 * inside axios/redirect wrappers (AxiosError → RedirectionError → SsrfBlockedIpError).
 	 */
-	private findSsrfBlockedError(error: unknown): SsrfBlockedIpError | undefined {
+	private findSsrfBlockedError(
+		error: unknown,
+	): SsrfBlockedIpError | SsrfBlockedUrlError | undefined {
 		let current = ensureError(error);
 
 		for (let depth = 0; depth < 4 && current; depth++) {
-			if (current instanceof SsrfBlockedIpError) return current;
+			if (current instanceof SsrfBlockedIpError || current instanceof SsrfBlockedUrlError) {
+				return current;
+			}
 			current = ensureError(current.cause);
 		}
 

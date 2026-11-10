@@ -3,6 +3,7 @@ import {
 	OutboundHttp,
 	SsrfBlockedHostnameError,
 	SsrfBlockedIpError,
+	SsrfBlockedUrlError,
 	type HttpRequestClient,
 	type TypedHttpFullResponse,
 } from '@n8n/backend-network';
@@ -202,7 +203,9 @@ export class GitLabMergeRequestClient {
 			if (
 				chain.some(
 					(cause) =>
-						cause instanceof SsrfBlockedIpError || cause instanceof SsrfBlockedHostnameError,
+						cause instanceof SsrfBlockedIpError ||
+						cause instanceof SsrfBlockedHostnameError ||
+						cause instanceof SsrfBlockedUrlError,
 				)
 			) {
 				this.logger.warn('GitLab merge request call blocked by instance network policy', {

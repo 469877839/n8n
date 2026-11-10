@@ -100,7 +100,7 @@ describe('OAuth2UserInfoIdentifier (integration)', () => {
 
 	// Loopback is blocked by default; an internal target is reached via the
 	// allowlist (mirroring a self-hosted IdP), not by disabling the guard.
-	const allowLoopback = { enabled: true, allowedIpRanges: ['127.0.0.0/8'] };
+	const allowLoopback = { enabled: true, allowedIpRanges: ['127.0.0.0/8'], allowedPorts: [] };
 
 	const boundOptions = () => ({
 		metadataUri: `${baseUrl}/.well-known/openid-configuration`,

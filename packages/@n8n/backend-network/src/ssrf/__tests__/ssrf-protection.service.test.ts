@@ -108,6 +108,26 @@ describe('SsrfProtectionService', () => {
 			);
 		});
 
+		describe('blocked multicast and unspecified addresses', () => {
+			it.each(['224.0.0.1', '239.255.255.250', '255.255.255.255'])(
+				'should block IPv4 multicast/reserved address %s',
+				(ip) => {
+					const { service } = createService();
+					expectBlocked(service.validateIp(ip));
+				},
+			);
+
+			it.each(['ff02::1', 'ff05::2'])('should block IPv6 multicast address %s', (ip) => {
+				const { service } = createService();
+				expectBlocked(service.validateIp(ip));
+			});
+
+			it('should block the IPv6 unspecified address ::', () => {
+				const { service } = createService();
+				expectBlocked(service.validateIp('::'));
+			});
+		});
+
 		describe('allowed public addresses', () => {
 			it.each(['8.8.8.8', '1.1.1.1', '93.184.216.34', '2606:4700::6810:85e5'])(
 				'should allow public IP %s',
@@ -279,6 +299,124 @@ describe('SsrfProtectionService', () => {
 
 			expectAllowed(result);
 			expect(dnsResolver.lookup).toHaveBeenCalledWith('cached.example.com', { all: true });
+		});
+	});
+
+	describe('scheme and port policy', () => {
+		const expectBlockedUrl = (result: unknown, reason: 'scheme' | 'port') => {
+			expect(result).toEqual({
+				ok: false,
+				error: expect.objectContaining({ name: 'SsrfBlockedUrlError', reason }) as Error,
+			});
+		};
+
+		it('should allow http and https URLs by default', async () => {
+			const { service } = createService();
+
+			expectAllowed(await service.validateUrl('http://8.8.8.8/'));
+			expectAllowed(await service.validateUrl('https://8.8.8.8/'));
+		});
+
+		it.each(['ftp://8.8.8.8/file', 'file:///etc/passwd', 'gopher://8.8.8.8/'])(
+			'should reject the disallowed scheme of %s',
+			async (url) => {
+				const { service } = createService();
+				expectBlockedUrl(await service.validateUrl(url), 'scheme');
+			},
+		);
+
+		it('should allow a scheme on the configured allow-list', async () => {
+			const { service } = createService({
+				allowedSchemes: ['https'] as unknown as SsrfProtectionConfig['allowedSchemes'],
+			});
+
+			expectAllowed(await service.validateUrl('https://8.8.8.8/'));
+			expectBlockedUrl(await service.validateUrl('http://8.8.8.8/'), 'scheme');
+		});
+
+		it('should skip the scheme check when the allow-list is empty', async () => {
+			const { service } = createService({
+				allowedSchemes: [] as unknown as SsrfProtectionConfig['allowedSchemes'],
+				allowedPorts: [],
+			});
+
+			expectAllowed(await service.validateUrl('ftp://8.8.8.8/file'));
+		});
+
+		it('should reject a non-default port by default', async () => {
+			const { service } = createService();
+
+			expectBlockedUrl(await service.validateUrl('http://8.8.8.8:8080/'), 'port');
+			expectBlockedUrl(await service.validateUrl('http://8.8.8.8:22/'), 'port');
+		});
+
+		it('should allow explicit default ports', async () => {
+			const { service } = createService();
+
+			expectAllowed(await service.validateUrl('http://8.8.8.8:80/'));
+			expectAllowed(await service.validateUrl('https://8.8.8.8:443/'));
+		});
+
+		it('should allow a port on the configured allow-list', async () => {
+			const { service } = createService({ allowedPorts: [80, 443, 8080] });
+
+			expectAllowed(await service.validateUrl('http://8.8.8.8:8080/'));
+		});
+
+		it('should skip the port check when the allow-list is empty', async () => {
+			const { service } = createService({ allowedPorts: [] });
+
+			expectAllowed(await service.validateUrl('http://8.8.8.8:8080/'));
+		});
+
+		it('should check scheme and port before resolving DNS', async () => {
+			const dnsResolver = createMockDnsResolver();
+			const { service } = createService({}, dnsResolver);
+
+			await service.validateUrl('ftp://example.com/');
+			await service.validateUrl('http://example.com:1234/');
+
+			expect(dnsResolver.lookup).not.toHaveBeenCalled();
+		});
+
+		it('should reject a redirect to a disallowed scheme', () => {
+			const { service } = createService();
+
+			expect(() => service.validateRedirectSync('ftp://8.8.8.8/file')).toThrow(
+				'The request was blocked because the URL scheme is not allowed',
+			);
+		});
+
+		it('should reject a redirect to a disallowed port', () => {
+			const { service } = createService();
+
+			expect(() => service.validateRedirectSync('http://8.8.8.8:8080/')).toThrow(
+				'The request was blocked because the destination port is not allowed',
+			);
+		});
+
+		it('should emit ssrf.blocked with reason blocked_scheme', async () => {
+			const { service } = createService();
+			const blocked = vi.fn();
+			service.events.on('ssrf.blocked', blocked);
+
+			await service.validateUrl('ftp://8.8.8.8/');
+
+			expect(blocked).toHaveBeenCalledWith(
+				expect.objectContaining({ phase: 'pre_flight', reason: 'blocked_scheme' }),
+			);
+		});
+
+		it('should emit ssrf.blocked with reason blocked_port', async () => {
+			const { service } = createService();
+			const blocked = vi.fn();
+			service.events.on('ssrf.blocked', blocked);
+
+			await service.validateUrl('http://8.8.8.8:8080/');
+
+			expect(blocked).toHaveBeenCalledWith(
+				expect.objectContaining({ phase: 'pre_flight', reason: 'blocked_port' }),
+			);
 		});
 	});
 
@@ -717,6 +855,38 @@ describe('SsrfProtectionService', () => {
 
 				const result = await service.validateUrl('http://127.0.0.1/%61%64%6d%69%6e');
 				expectBlocked(result);
+			});
+		});
+
+		describe('userinfo tricks', () => {
+			it('should block when the authority hides a loopback host behind userinfo', async () => {
+				const { service } = createService();
+
+				// The host is 127.0.0.1; 'public.example' is the userinfo.
+				expectBlocked(await service.validateUrl('http://public.example@127.0.0.1/'));
+			});
+
+			it('should block when userinfo contains an @-signed decoy', async () => {
+				const { service } = createService();
+
+				// The host is 10.0.0.1; 'user@public.example' is the userinfo.
+				expectBlocked(await service.validateUrl('http://user@public.example@10.0.0.1/'));
+			});
+
+			it('should block a loopback host behind percent-encoded userinfo', async () => {
+				const { service } = createService();
+
+				expectBlocked(await service.validateUrl('http://%75%73%65%72@127.0.0.1/'));
+			});
+
+			it('should allow a public host that carries userinfo', async () => {
+				const dnsResolver = createMockDnsResolver();
+				dnsResolver.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+
+				const { service } = createService({}, dnsResolver);
+
+				expectAllowed(await service.validateUrl('http://token@example.com/'));
+				expect(dnsResolver.lookup).toHaveBeenCalledWith('example.com', { all: true });
 			});
 		});
 

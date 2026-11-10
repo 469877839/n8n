@@ -52,7 +52,9 @@ export function createPassthroughSsrfGuard(): SsrfGuard {
 export function isSsrfBlockedError(error: unknown): boolean {
 	let current: Error | undefined = ensureError(error);
 	for (let depth = 0; depth < 4 && current; depth++) {
-		if (current.name === 'SsrfBlockedIpError') return true;
+		if (current.name === 'SsrfBlockedIpError' || current.name === 'SsrfBlockedUrlError') {
+			return true;
+		}
 		current = current.cause ? ensureError(current.cause) : undefined;
 	}
 	return false;
